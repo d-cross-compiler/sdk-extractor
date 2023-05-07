@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches: '*'
+    tags: v*
+  pull_request:
+    branches:
+      - master
+
+permissions:
+  contents: write
+
+jobs:
+  ci:
+    name: ${{ matrix.arch }}-${{ matrix.os.name }}${{ matrix.os.version }}
+    runs-on: ubuntu-latest
+    env:
+      EXTRACTOR_TARGET_ARCH: ${{ matrix.arch }}
+      EXTRACTOR_TARGET_OS: ${{ matrix.os.name }}
+      EXTRACTOR_TARGET_VERSION: ${{ matrix.os.version }}
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86_64]
+        os:
+          - name: freebsd
+            version: '13.1'
+
+          - name: netbsd
+            version: '9.2'
+
+          - name: openbsd
+            version: '7.3'
+
+        include:
+          - arch: arm64
+            os:
+              name: openbsd
+              version: '7.3'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          persist-credentials: false
+
+      - name: Install Dependencies
+        run: sudo apt update -qq && sudo apt install pixz
+
+      - name: Extract version
+        # run: echo "sdk_version=0.0.1" >> $GITHUB_ENV
+        run: echo "sdk_version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
+
+      - name: Extract
+        run: ./extract-sdk.sh
+        env:
+          EXTRACTOR_VERSION: ${{ env.sdk_version }}
+
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: SDK ${{ env.sdk_version }}
+          draft: true
+          files: sdk*.tar.xz
+        env:
+          GITHUB_TOKEN: ${{ inputs.github_token }}
